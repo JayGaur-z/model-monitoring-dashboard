@@ -1,15 +1,6 @@
-from django.shortcuts import render
-from student_model.models import StudentLog
-from house_model.models import HouseLog
+from django.shortcuts import redirect
 
 def home(request):
-    total_student_predictions = StudentLog.objects.count()
-    total_house_predictions = HouseLog.objects.count()
-    total_predictions = total_student_predictions + total_house_predictions
-    # Testing automatic Jenkins CI/CD trigger
-    context = {
-        'total_predictions': total_predictions,
-        'total_student_predictions': total_student_predictions,
-        'total_house_predictions': total_house_predictions,
-    }
-    return render(request, 'home.html', context)
+    """Clean redirect to the main active AutoML dashboard."""
+    return redirect('dashboard')
+

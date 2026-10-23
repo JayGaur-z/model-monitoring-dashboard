@@ -94,7 +94,7 @@ def predict(request, model_name):
                 input_data[f] = 0.0
                 
         try:
-            clf = joblib.load(model_obj.pkl_file_path)
+            clf = joblib.load(model_obj.get_absolute_pkl_path())
             input_df = pd.DataFrame([input_data])
             # Reorder columns to match training exactly
             input_df = input_df[features]
@@ -143,9 +143,10 @@ def monitor(request, model_name):
 
     # Fetch dataset statistics
     dataset_stats = model_obj.dataset_stats
-    if not dataset_stats and model_obj.dataset_file_path and os.path.exists(model_obj.dataset_file_path):
+    dataset_path = model_obj.get_absolute_dataset_path()
+    if not dataset_stats and dataset_path and os.path.exists(dataset_path):
         try:
-            df = pd.read_csv(model_obj.dataset_file_path)
+            df = pd.read_csv(dataset_path)
             dataset_stats = compute_dataset_stats(df, target_col=model_obj.target_column)
             model_obj.dataset_stats = dataset_stats
             model_obj.save(update_fields=['dataset_stats'])

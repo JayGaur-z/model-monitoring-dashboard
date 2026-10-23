@@ -1,3 +1,5 @@
+import os
+from django.conf import settings
 from django.db import models
 
 class TrainedModel(models.Model):
@@ -11,6 +13,28 @@ class TrainedModel(models.Model):
 
     def __str__(self):
         return self.model_name
+
+    def get_absolute_pkl_path(self):
+        """Resolves the .pkl model file path portably across environments."""
+        if self.pkl_file_path and os.path.exists(self.pkl_file_path):
+            return self.pkl_file_path
+        if self.pkl_file_path:
+            filename = os.path.basename(self.pkl_file_path)
+            local_path = os.path.join(settings.BASE_DIR, 'saved_models', filename)
+            if os.path.exists(local_path):
+                return local_path
+        return self.pkl_file_path
+
+    def get_absolute_dataset_path(self):
+        """Resolves the dataset CSV file path portably across environments."""
+        if self.dataset_file_path and os.path.exists(self.dataset_file_path):
+            return self.dataset_file_path
+        if self.dataset_file_path:
+            filename = os.path.basename(self.dataset_file_path)
+            local_path = os.path.join(settings.BASE_DIR, 'saved_datasets', filename)
+            if os.path.exists(local_path):
+                return local_path
+        return self.dataset_file_path
 
 class PredictionLog(models.Model):
     trained_model = models.ForeignKey(TrainedModel, on_delete=models.CASCADE, related_name='logs')
