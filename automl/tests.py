@@ -202,3 +202,41 @@ class StatisticalDriftUnitTests(TestCase):
         drifted_feature_names = [f['feature'] for f in report_drifted['feature_results'] if f['drift_detected']]
         self.assertIn('cibil_score', drifted_feature_names)
         self.assertIn('income_annum', drifted_feature_names)
+
+    def test_simulate_drift_isolation_preserves_other_models(self):
+        """Verifies simulate_drift --clear-existing only clears the target model logs without touching other models."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        other_model = TrainedModel.objects.create(
+            model_name="Untouched_Peer_Model",
+            pkl_file_path="dummy.pkl",
+            feature_columns=["f1"],
+            target_column="y"
+        )
+        # Create 5 logs for other model
+        for i in range(5):
+            PredictionLog.objects.create(
+                trained_model=other_model,
+                input_data={"f1": float(i)},
+                prediction_result="0",
+                response_time_ms=15.0
+            )
+
+        loan_model = self._get_or_create_loan_model()
+        out = StringIO()
+        # Run simulate_drift with --clear-existing for loan_model
+        call_command('simulate_drift', model='Loan_Approval_Model', mode='normal', count=30, clear_existing=True, stdout=out)
+
+        # Confirm peer model logs were NOT touched
+        self.assertEqual(PredictionLog.objects.filter(trained_model=other_model).count(), 5)
+        self.assertEqual(PredictionLog.objects.filter(trained_model=loan_model).count(), 30)
+
+    def test_settings_and_production_environment_configuration(self):
+        """Verifies Django settings support configurable environments (DB path, static root, WSGI)."""
+        from django.conf import settings
+        self.assertTrue(hasattr(settings, 'STATIC_ROOT'))
+        self.assertTrue(hasattr(settings, 'WSGI_APPLICATION'))
+        self.assertEqual(settings.WSGI_APPLICATION, 'core_project.wsgi.application')
+        self.assertEqual(settings.DATABASES['default']['ENGINE'], 'django.db.backends.sqlite3')
+

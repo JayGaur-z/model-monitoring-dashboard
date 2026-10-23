@@ -14,6 +14,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             '--model',
+            '--model-name',
+            dest='model',
             type=str,
             default='Loan_Approval_Model',
             help='Name of the trained model to simulate for (default: Loan_Approval_Model)'

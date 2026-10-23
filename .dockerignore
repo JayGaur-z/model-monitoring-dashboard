@@ -1,12 +1,48 @@
+# Version Control
+.git
+.gitignore
+
+# Python Environments & Cache
 venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
 env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Local Database & Backups
 db.sqlite3
+db.sqlite3.backup
+*.sqlite3
+*.db
+*.backup
+
+# Test & Coverage Artifacts
+.pytest_cache/
+reports/
+htmlcov/
+.coverage
+.coverage.*
+
+# Scratch Scripts & Temp Artifacts
+verify_phase*.py
+media_*
+*.png
+*.jpg
+*.log
+
+# Jenkins & CI Artifacts
 .jenkins/
 jenkins.war
 jenkins_17.war
+
+# IDE Configuration
 .vscode/
+.idea/
+
+# Docker Files (to avoid recursive copy)
+Dockerfile*
+docker-compose*
+.dockerignore

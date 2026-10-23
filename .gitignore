@@ -18,3 +18,9 @@ jenkins_17.war
 # VS Code / Environment
 .vscode/
 .env
+
+# Test & CI Reports
+reports/
+.pytest_cache/
+*.backup
+media_*.png
