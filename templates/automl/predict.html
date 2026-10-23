@@ -65,24 +65,24 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label class="form-label">CIBIL / Credit Score (300 &ndash; 900)</label>
-                        <input type="number" name="cibil_score" class="form-control" required min="300" max="900" value="750" placeholder="e.g. 750">
+                        <input type="number" name="cibil_score" class="form-control" required min="300" max="900" value="{% if submitted_inputs %}{{ submitted_inputs.cibil_score|floatformat:0 }}{% else %}750{% endif %}" placeholder="e.g. 750">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Number of Dependents</label>
-                        <input type="number" name="no_of_dependents" class="form-control" required min="0" max="10" value="2">
+                        <input type="number" name="no_of_dependents" class="form-control" required min="0" max="10" value="{% if submitted_inputs %}{{ submitted_inputs.no_of_dependents|floatformat:0 }}{% else %}2{% endif %}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Education Status</label>
                         <select name="friendly_education" class="form-select">
-                            <option value="Graduate" selected>Graduate</option>
-                            <option value="Not Graduate">Not Graduate</option>
+                            <option value="Graduate" {% if not submitted_inputs or submitted_inputs.friendly_education != 'Not Graduate' %}selected{% endif %}>Graduate</option>
+                            <option value="Not Graduate" {% if submitted_inputs and submitted_inputs.friendly_education == 'Not Graduate' %}selected{% endif %}>Not Graduate</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Employment Classification</label>
                         <select name="friendly_self_employed" class="form-select">
-                            <option value="No" selected>Salaried / Employed</option>
-                            <option value="Yes">Self-Employed / Business Owner</option>
+                            <option value="No" {% if not submitted_inputs or submitted_inputs.friendly_self_employed != 'Yes' %}selected{% endif %}>Salaried / Employed</option>
+                            <option value="Yes" {% if submitted_inputs and submitted_inputs.friendly_self_employed == 'Yes' %}selected{% endif %}>Self-Employed / Business Owner</option>
                         </select>
                     </div>
                 </div>
@@ -95,15 +95,15 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label class="form-label">Annual Income (&rupee;)</label>
-                        <input type="number" step="any" name="income_annum" class="form-control" required value="7500000" placeholder="e.g. 7,500,000">
+                        <input type="number" step="any" name="income_annum" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.income_annum|floatformat:0 }}{% else %}7500000{% endif %}" placeholder="e.g. 7,500,000">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Loan Amount Requested (&rupee;)</label>
-                        <input type="number" step="any" name="loan_amount" class="form-control" required value="18000000" placeholder="e.g. 18,000,000">
+                        <input type="number" step="any" name="loan_amount" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.loan_amount|floatformat:0 }}{% else %}18000000{% endif %}" placeholder="e.g. 18,000,000">
                     </div>
                     <div class="form-group" style="grid-column: span 2;">
                         <label class="form-label">Loan Term (Years)</label>
-                        <input type="number" name="loan_term" class="form-control" required min="1" max="30" value="12">
+                        <input type="number" name="loan_term" class="form-control" required min="1" max="30" value="{% if submitted_inputs %}{{ submitted_inputs.loan_term|floatformat:0 }}{% else %}12{% endif %}">
                     </div>
                 </div>
             </div>
@@ -115,19 +115,19 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label class="form-label">Residential Assets Value</label>
-                        <input type="number" step="any" name="residential_assets_value" class="form-control" required value="3500000">
+                        <input type="number" step="any" name="residential_assets_value" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.residential_assets_value|floatformat:0 }}{% else %}3500000{% endif %}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Commercial Assets Value</label>
-                        <input type="number" step="any" name="commercial_assets_value" class="form-control" required value="2000000">
+                        <input type="number" step="any" name="commercial_assets_value" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.commercial_assets_value|floatformat:0 }}{% else %}2000000{% endif %}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Luxury Assets Value</label>
-                        <input type="number" step="any" name="luxury_assets_value" class="form-control" required value="15000000">
+                        <input type="number" step="any" name="luxury_assets_value" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.luxury_assets_value|floatformat:0 }}{% else %}15000000{% endif %}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Bank Asset / Savings Value</label>
-                        <input type="number" step="any" name="bank_asset_value" class="form-control" required value="4000000">
+                        <input type="number" step="any" name="bank_asset_value" class="form-control" required value="{% if submitted_inputs %}{{ submitted_inputs.bank_asset_value|floatformat:0 }}{% else %}4000000{% endif %}">
                     </div>
                 </div>
             </div>

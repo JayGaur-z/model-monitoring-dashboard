@@ -18,15 +18,28 @@ def build_model(request):
         
         if not model_name or not csv_file:
             return render(request, 'automl/build.html', {'error': 'Please provide model name and CSV file'})
+
+        model_name = model_name.strip()
+        if TrainedModel.objects.filter(model_name=model_name).exists():
+            return render(request, 'automl/build.html', {
+                'error': f'A model with the identifier "{model_name}" already exists. Please choose a unique name.',
+                'model_name': model_name
+            })
             
         try:
             df = pd.read_csv(csv_file)
         except Exception as e:
-            return render(request, 'automl/build.html', {'error': f'Error reading CSV: {str(e)}'})
+            return render(request, 'automl/build.html', {
+                'error': f'Error reading CSV: {str(e)}',
+                'model_name': model_name
+            })
             
         df = df.dropna()
         if df.empty:
-            return render(request, 'automl/build.html', {'error': 'Dataset is empty after dropping missing values'})
+            return render(request, 'automl/build.html', {
+                'error': 'Dataset is empty after dropping missing values',
+                'model_name': model_name
+            })
             
         target_col = df.columns[-1]
         feature_cols = list(df.columns[:-1])
@@ -119,6 +132,14 @@ def predict(request, model_name):
     features = model_obj.feature_columns
     is_loan_model = (model_name == 'Loan_Approval_Model')
     
+    if not features:
+        return render(request, 'automl/predict.html', {
+            'model': model_obj,
+            'features': [],
+            'is_loan_model': is_loan_model,
+            'error': 'This model has no registered feature columns and cannot execute inference.'
+        })
+        
     if request.method == 'POST':
         start_time = time.time()
         input_data = {}
@@ -174,6 +195,11 @@ def predict(request, model_name):
                 prediction_result=friendly_label,
                 response_time_ms=response_time_ms
             )
+
+            submitted_dict = dict(input_data)
+            if is_loan_model:
+                submitted_dict['friendly_education'] = friendly_education or ('Not Graduate' if input_data.get('education_ Not Graduate') == 1.0 else 'Graduate')
+                submitted_dict['friendly_self_employed'] = friendly_self_employed or ('Yes' if input_data.get('self_employed_ Yes') == 1.0 else 'No')
             
             return render(request, 'automl/predict.html', {
                 'model': model_obj, 
@@ -183,7 +209,7 @@ def predict(request, model_name):
                 'raw_prediction': prediction_str,
                 'is_positive_outcome': is_positive_outcome,
                 'response_time_ms': round(response_time_ms, 2),
-                'submitted_inputs': input_data,
+                'submitted_inputs': submitted_dict,
             })
         except Exception as e:
             return render(request, 'automl/predict.html', {
@@ -207,8 +233,8 @@ def monitor(request, model_name):
     avg_response_time = logs.aggregate(Avg('response_time_ms'))['response_time_ms__avg'] or 0
     recent_logs = logs[:10]
 
-    # Compute P95 latency
-    all_latencies = sorted([log.response_time_ms for log in logs[:100]])
+    # Compute P95 latency (safely handling None/missing values)
+    all_latencies = sorted([float(log.response_time_ms) for log in logs[:100] if log.response_time_ms is not None])
     p95_latency = all_latencies[int(len(all_latencies) * 0.95)] if all_latencies else avg_response_time
     
     # 1. Latency SLA Alert (System / DevOps performance)
@@ -261,7 +287,9 @@ def monitor(request, model_name):
 
                 if len(ref_s) >= 10 and len(prod_s) >= 5 and ref_s.nunique() > 1:
                     import numpy as np
-                    bins = np.linspace(ref_s.min(), ref_s.max(), 7)
+                    min_val = min(float(ref_s.min()), float(prod_s.min()))
+                    max_val = max(float(ref_s.max()), float(prod_s.max()))
+                    bins = np.linspace(min_val, max_val, 7)
                     ref_counts, _ = np.histogram(ref_s, bins=bins)
                     prod_counts, _ = np.histogram(prod_s, bins=bins)
                     dist_bins = [f"{int(bins[i]):,}-{int(bins[i+1]):,}" for i in range(len(bins)-1)]

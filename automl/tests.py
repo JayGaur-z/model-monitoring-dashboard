@@ -240,3 +240,62 @@ class StatisticalDriftUnitTests(TestCase):
         self.assertEqual(settings.WSGI_APPLICATION, 'core_project.wsgi.application')
         self.assertEqual(settings.DATABASES['default']['ENGINE'], 'django.db.backends.sqlite3')
 
+    def test_drift_detection_includes_and_evaluates_categorical_features(self):
+        """Verifies detect_data_drift includes and evaluates categorical features using Chi-Square."""
+        model = self._get_or_create_loan_model()
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('simulate_drift', model='Loan_Approval_Model', mode='drifted', count=30, clear_existing=True, stdout=out)
+        report = detect_data_drift(model, sample_window=30)
+        self.assertEqual(report['status'], 'SUCCESS')
+        tested_features = {f['feature']: f['test'] for f in report['feature_results']}
+        # Ensure categorical features are not skipped
+        self.assertIn('education_ Not Graduate', tested_features)
+        self.assertIn('self_employed_ Yes', tested_features)
+        self.assertEqual(tested_features['education_ Not Graduate'], 'Chi-Square')
+        self.assertEqual(tested_features['self_employed_ Yes'], 'Chi-Square')
+
+    def test_build_model_rejects_duplicate_model_name(self):
+        """Verifies build_model rejects duplicate model names with 200 and error message without crashing with IntegrityError."""
+        model = self._get_or_create_loan_model()
+        client = Client()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_content = b"feature1,feature2,target\n1,2,0\n3,4,1\n"
+        csv_file = SimpleUploadedFile("test.csv", csv_content, content_type="text/csv")
+        response = client.post(reverse('build_model'), {
+            'model_name': model.model_name,
+            'csv_file': csv_file
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('already exists', response.context['error'])
+        self.assertEqual(response.context['model_name'], model.model_name)
+
+    def test_predict_handles_empty_feature_model_gracefully(self):
+        """Verifies predict view returns a clean error when a model has no feature columns."""
+        model = TrainedModel.objects.create(
+            model_name="Empty_Feature_Model",
+            pkl_file_path="dummy.pkl",
+            feature_columns=[],
+            target_column="target"
+        )
+        client = Client()
+        response = client.get(reverse('predict', kwargs={'model_name': model.model_name}))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('error', response.context)
+        self.assertIn('no registered feature columns', response.context['error'])
+
+    def test_portable_path_resolver_handles_settings_base_dir(self):
+        """Verifies model path resolver methods anchor relative paths to settings.BASE_DIR."""
+        from django.conf import settings
+        model = TrainedModel(
+            model_name="Path_Test_Model",
+            pkl_file_path="saved_models/test.pkl",
+            dataset_file_path="saved_datasets/test.csv"
+        )
+        expected_pkl = os.path.normpath(os.path.join(settings.BASE_DIR, 'saved_models', 'test.pkl'))
+        expected_csv = os.path.normpath(os.path.join(settings.BASE_DIR, 'saved_datasets', 'test.csv'))
+        self.assertEqual(os.path.normpath(model.get_absolute_pkl_path()), expected_pkl)
+        self.assertEqual(os.path.normpath(model.get_absolute_dataset_path()), expected_csv)
+
+

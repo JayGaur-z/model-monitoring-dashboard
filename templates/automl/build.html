@@ -52,7 +52,7 @@
             
             <div class="form-group">
                 <label class="form-label" for="model_name">Model Identifier Name <span style="color: var(--danger-rose);">*</span></label>
-                <input type="text" name="model_name" id="model_name" class="form-control mono" required placeholder="e.g. Credit_Default_Predictor">
+                <input type="text" name="model_name" id="model_name" class="form-control mono" required placeholder="e.g. Credit_Default_Predictor" value="{{ model_name|default:'' }}">
                 <div style="font-size: 0.75rem; color: var(--text-faint); margin-top: 0.35rem;">
                     Unique alphanumeric identifier used for routing predictions, storage filenames, and monitoring metrics.
                 </div>

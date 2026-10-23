@@ -16,25 +16,43 @@ class TrainedModel(models.Model):
 
     def get_absolute_pkl_path(self):
         """Resolves the .pkl model file path portably across environments."""
-        if self.pkl_file_path and os.path.exists(self.pkl_file_path):
+        if not self.pkl_file_path:
+            return None
+        if os.path.isabs(self.pkl_file_path) and os.path.exists(self.pkl_file_path):
             return self.pkl_file_path
-        if self.pkl_file_path:
-            filename = os.path.basename(self.pkl_file_path)
-            local_path = os.path.join(settings.BASE_DIR, 'saved_models', filename)
-            if os.path.exists(local_path):
-                return local_path
-        return self.pkl_file_path
+        base_rel_path = os.path.join(settings.BASE_DIR, self.pkl_file_path)
+        if os.path.exists(base_rel_path):
+            return base_rel_path
+        filename = os.path.basename(self.pkl_file_path)
+        local_path = os.path.join(settings.BASE_DIR, 'saved_models', filename)
+        if os.path.exists(local_path):
+            return local_path
+        if os.path.isabs(self.pkl_file_path):
+            return self.pkl_file_path
+        return base_rel_path
 
     def get_absolute_dataset_path(self):
         """Resolves the dataset CSV file path portably across environments."""
-        if self.dataset_file_path and os.path.exists(self.dataset_file_path):
+        if not self.dataset_file_path:
+            return self._fallback_dataset_search()
+        if os.path.isabs(self.dataset_file_path) and os.path.exists(self.dataset_file_path):
             return self.dataset_file_path
-        if self.dataset_file_path:
-            filename = os.path.basename(self.dataset_file_path)
-            local_path = os.path.join(settings.BASE_DIR, 'saved_datasets', filename)
-            if os.path.exists(local_path):
-                return local_path
-        # Smart fallback: inspect saved_datasets for matching dataset CSV
+        base_rel_path = os.path.join(settings.BASE_DIR, self.dataset_file_path)
+        if os.path.exists(base_rel_path):
+            return base_rel_path
+        filename = os.path.basename(self.dataset_file_path)
+        local_path = os.path.join(settings.BASE_DIR, 'saved_datasets', filename)
+        if os.path.exists(local_path):
+            return local_path
+        fallback = self._fallback_dataset_search()
+        if fallback:
+            return fallback
+        if os.path.isabs(self.dataset_file_path):
+            return self.dataset_file_path
+        return base_rel_path
+
+    def _fallback_dataset_search(self):
+        """Smart fallback: inspect saved_datasets for matching dataset CSV."""
         datasets_dir = os.path.join(settings.BASE_DIR, 'saved_datasets')
         if os.path.exists(datasets_dir):
             clean_name = self.model_name.lower().replace('_', ' ').replace('-', ' ')

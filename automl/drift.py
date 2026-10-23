@@ -213,7 +213,7 @@ def detect_data_drift(model_obj, sample_window=100, alpha=0.05, min_samples=25):
 
     # If reference data has raw categorical columns but model uses one-hot dummy columns,
     # expand reference features to match
-    if any(df_ref_features[c].dtype == 'object' for c in df_ref_features.columns):
+    if any(not pd.api.types.is_numeric_dtype(df_ref_features[c]) for c in df_ref_features.columns):
         df_ref_encoded = pd.get_dummies(df_ref_features, drop_first=True)
     else:
         df_ref_encoded = df_ref_features

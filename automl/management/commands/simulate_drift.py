@@ -74,7 +74,7 @@ class Command(BaseCommand):
         cols_to_drop = [c for c in [target_col, 'loan_id', 'CustomerID', 'id'] if c in df_ref.columns]
         df_features = df_ref.drop(columns=cols_to_drop, errors='ignore')
 
-        if any(df_features[c].dtype == 'object' for c in df_features.columns):
+        if any(not pd.api.types.is_numeric_dtype(df_features[c]) for c in df_features.columns):
             df_encoded = pd.get_dummies(df_features, drop_first=True)
         else:
             df_encoded = df_features

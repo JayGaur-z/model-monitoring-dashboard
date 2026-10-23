@@ -347,46 +347,51 @@
 <!-- Chart.js Scripts -->
 <script>
     // 1. Latency Line Chart
-    const ctxLatency = document.getElementById('latencyChart').getContext('2d');
-    new Chart(ctxLatency, {
-        type: 'line',
-        data: {
-            labels: {{ chart_labels|safe }},
-            datasets: [{
-                label: 'Inference Latency (ms)',
-                data: {{ chart_data|safe }},
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.35,
-                pointRadius: 3,
-                pointBackgroundColor: '#3b82f6'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
+    const latencyCanvas = document.getElementById('latencyChart');
+    if (latencyCanvas) {
+        const ctxLatency = latencyCanvas.getContext('2d');
+        new Chart(ctxLatency, {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Inference Latency (ms)',
+                    data: {{ chart_data|safe }},
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#3b82f6'
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.06)' },
-                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
                 },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.06)' },
+                        ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
     // 2. Feature Distribution Comparison Chart
     {% if dist_feature_name and dist_bins %}
-    const ctxDist = document.getElementById('distributionChart').getContext('2d');
+    const distCanvas = document.getElementById('distributionChart');
+    if (distCanvas) {
+        const ctxDist = distCanvas.getContext('2d');
     new Chart(ctxDist, {
         type: 'bar',
         data: {
@@ -433,6 +438,7 @@
             }
         }
     });
+    }
     {% endif %}
 </script>
 {% endblock %}
