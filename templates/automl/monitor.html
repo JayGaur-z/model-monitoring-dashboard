@@ -1,214 +1,228 @@
 {% extends 'base.html' %}
 
+{% block title %}Monitor: {{ model.model_name }} — MLOps Sentinel{% endblock %}
+
 {% block content %}
-<style>
-    .header-actions {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-
-    .metric-card {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: var(--accent-color);
-        margin: 0.5rem 0;
-    }
-
-    .alert-card {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        border-radius: 0.5rem;
-        padding: 1rem 1.5rem;
-        margin-bottom: 2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        color: #fca5a5;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 1rem;
-    }
-
-    th, td {
-        padding: 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--glass-border);
-    }
-
-    th {
-        color: var(--text-secondary);
-        font-weight: 500;
-        text-transform: uppercase;
-        font-size: 0.875rem;
-        letter-spacing: 0.05em;
-    }
-
-    tr:last-child td {
-        border-bottom: none;
-    }
-</style>
-
-<div class="header-actions">
-    <div>
-        <a href="{% url 'dashboard' %}" class="text-secondary" style="text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">&larr; Back to Dashboard</a>
-        <h1>Monitor: {{ model.model_name }}</h1>
-        <p class="text-secondary">Target Variable: {{ model.target_column }}</p>
-    </div>
-    <a href="{% url 'predict' model.model_name %}" class="btn btn-primary">Go to Prediction</a>
+<div class="breadcrumbs">
+    <a href="{% url 'dashboard' %}">Model Registry</a>
+    <span>/</span>
+    <span style="color: var(--text-main);">{{ model.model_name }}</span>
+    <span>/</span>
+    <span>Diagnostics & Drift</span>
 </div>
 
-{% if latency_alert %}
-<div class="alert-card" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fde68a;">
+<!-- Header Section -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem;">
     <div>
-        <h4 style="margin: 0 0 0.25rem 0; color: #fbbf24;">Latency SLA Warning (System Performance)</h4>
-        <p style="margin: 0; font-size: 0.875rem;">Average inference latency is high ({{ avg_response_time }} ms > 500 ms threshold). This indicates system/compute slowdown, not feature distribution drift.</p>
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+            <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--text-main); letter-spacing: -0.02em;">
+                {{ model.model_name }}
+            </h1>
+            <span class="badge badge-info" style="font-size: 0.8rem;">
+                Target: {{ model.target_column }}
+            </span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">
+            Tracking continuous feature distribution stability, inference throughput, and response latency.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{% url 'predict' model.model_name %}" class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Inference Playground
+        </a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline">
+            &larr; Back to Registry
+        </a>
+    </div>
+</div>
+
+<!-- Decoupled Alert Notifications -->
+{% if latency_alert %}
+<div class="alert-banner warning">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    <div>
+        <strong style="color: #fbbf24; font-size: 0.9rem;">System Latency SLA Warning (DevOps / Infrastructure Alert)</strong>
+        <p style="font-size: 0.825rem; margin-top: 0.2rem; line-height: 1.4;">
+            Average response time is currently <strong>{{ avg_response_time }} ms</strong>, exceeding the 500 ms SLA threshold. 
+            This reflects compute/server load and is strictly independent of machine learning feature distribution drift.
+        </p>
     </div>
 </div>
 {% endif %}
 
 {% if drift_alert %}
-<div class="alert-card">
+<div class="alert-banner danger">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink: 0; margin-top: 2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
     <div>
-        <h4 style="margin: 0 0 0.25rem 0; color: var(--danger);">Statistical Data Drift Detected (Covariate Shift)</h4>
-        <p style="margin: 0; font-size: 0.875rem;">{{ drift_report.message }} (Significance Level &alpha; = {{ drift_report.alpha }}). Baseline and production distributions differ significantly.</p>
+        <strong style="color: #f87171; font-size: 0.9rem;">Statistical Data Drift Alert (MLOps / Covariate Shift)</strong>
+        <p style="font-size: 0.825rem; margin-top: 0.2rem; line-height: 1.4;">
+            {{ drift_report.message }} Two-Sample Kolmogorov-Smirnov and Chi-Square tests indicate statistically significant divergence from baseline training distributions (&alpha; = {{ drift_report.alpha }}).
+        </p>
     </div>
 </div>
 {% endif %}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<div class="metrics-grid">
-    <div class="glass-card metric-card">
-        <span class="text-secondary">Total Predictions</span>
-        <span class="metric-value">{{ total_predictions }}</span>
+<!-- Key Metrics Grid -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <span class="kpi-label">Logged Inferences</span>
+        <span class="kpi-value">{{ total_predictions }}</span>
+        <span class="kpi-subtext">Total requests processed</span>
     </div>
-    <div class="glass-card metric-card">
-        <span class="text-secondary">Average Latency</span>
-        <span class="metric-value">{{ avg_response_time }} <span style="font-size: 1rem; color: var(--text-secondary);">ms</span></span>
+    <div class="kpi-card">
+        <span class="kpi-label">Mean Latency</span>
+        <span class="kpi-value">{{ avg_response_time }}<span style="font-size: 1rem; color: var(--text-muted);"> ms</span></span>
+        <span class="kpi-subtext">Average compute duration</span>
     </div>
-</div>
-
-<div class="glass-card" style="margin-bottom: 2rem;">
-    <h3>Latency Monitor (Last 20 Predictions)</h3>
-    <canvas id="latencyChart" height="80"></canvas>
-</div>
-
-<div class="glass-card">
-    <h3>Recent Inference Logs</h3>
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Prediction</th>
-                    <th>Latency</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in recent_logs %}
-                <tr>
-                    <td>{{ log.timestamp|date:"M d, Y H:i:s" }}</td>
-                    <td style="font-weight: bold; color: var(--success);">{{ log.prediction_result }}</td>
-                    <td>{{ log.response_time_ms|floatformat:2 }} ms</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="3" style="text-align: center; color: var(--text-secondary);">No predictions logged yet.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="kpi-card">
+        <span class="kpi-label">P95 Latency</span>
+        <span class="kpi-value">{{ p95_latency }}<span style="font-size: 1rem; color: var(--text-muted);"> ms</span></span>
+        <span class="kpi-subtext">95th percentile response time</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-label">Drift Evaluation</span>
+        {% if drift_report.status == 'SUCCESS' %}
+            {% if drift_alert %}
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+                <span class="kpi-value" style="color: var(--danger-rose);">{{ drift_report.drifted_features_count }}<span style="font-size: 1rem; color: var(--text-muted);">/{{ drift_report.total_tested_features }}</span></span>
+                <span class="badge badge-danger">Drifted</span>
+            </div>
+            <span class="kpi-subtext">Features rejected H0 at &alpha;={{ drift_report.alpha }}</span>
+            {% else %}
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+                <span class="kpi-value" style="color: var(--success-green);">0<span style="font-size: 1rem; color: var(--text-muted);">/{{ drift_report.total_tested_features }}</span></span>
+                <span class="badge badge-success">Stable</span>
+            </div>
+            <span class="kpi-subtext">All features conform to baseline</span>
+            {% endif %}
+        {% else %}
+            <span class="kpi-value" style="color: var(--warning-amber); font-size: 1.4rem; margin-top: 0.25rem;">
+                {{ drift_report.status }}
+            </span>
+            <span class="kpi-subtext">{{ drift_report.sample_count }}/{{ drift_report.min_required }} logs required</span>
+        {% endif %}
     </div>
 </div>
 
-<div class="glass-card" style="margin-top: 2rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+<!-- Visualizations Grid (Latency Timeline & Distribution Shift Chart) -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Latency Timeline Chart -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-main);">Inference Latency Timeline</h3>
+                <p style="color: var(--text-muted); font-size: 0.75rem;">Recent response time trends across the last 20 predictions</p>
+            </div>
+            <span class="badge badge-info">SLA: 500ms</span>
+        </div>
+        <div style="position: relative; height: 220px; width: 100%;">
+            <canvas id="latencyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Feature Distribution Comparison Chart -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-main);">
+                    Empirical Distribution Comparison
+                </h3>
+                <p style="color: var(--text-muted); font-size: 0.75rem;">
+                    {% if dist_feature_name %}
+                        Feature: <strong style="color: #93c5fd;">{{ dist_feature_name }}</strong> (Baseline Training % vs Live Production %)
+                    {% else %}
+                        Feature distribution visualization (requires reference dataset)
+                    {% endif %}
+                </p>
+            </div>
+            {% if dist_feature_name %}
+            <span class="badge badge-info">Histogram Overlay</span>
+            {% endif %}
+        </div>
+        <div style="position: relative; height: 220px; width: 100%;">
+            {% if dist_feature_name and dist_bins %}
+            <canvas id="distributionChart"></canvas>
+            {% else %}
+            <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-faint); font-size: 0.85rem; text-align: center; padding: 1rem;">
+                Collect at least 10 production predictions with baseline reference data to render feature distribution comparisons.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Statistical Data Drift Table Card -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
         <div>
-            <h3 style="margin-bottom: 0.25rem;">🔬 Statistical Data Drift Monitoring (MLOps)</h3>
-            <p class="text-secondary" style="margin: 0; font-size: 0.875rem;">
-                Comparing recent inference inputs against baseline reference data using Two-Sample Kolmogorov-Smirnov (Numerical) and Chi-Square (Categorical) tests.
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Statistical Data Drift Diagnostics</h2>
+                <span class="badge badge-info">Kolmogorov-Smirnov & Chi-Square</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem;">
+                Two-sample hypothesis testing evaluating whether production feature streams deviate from baseline reference distributions.
             </p>
         </div>
-        {% if drift_report %}
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <span style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                Window: <strong>{{ drift_report.sample_count }}</strong> / {{ drift_report.sample_window }} logs
+        {% if drift_report.status == 'SUCCESS' %}
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span class="mono" style="font-size: 0.75rem; color: var(--text-muted); background: #0b1324; padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-subtle);">
+                Sample Window: {{ drift_report.sample_count }} logs
             </span>
-            <span style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                Significance &alpha; = <strong>{{ drift_report.alpha }}</strong>
+            <span class="mono" style="font-size: 0.75rem; color: var(--text-muted); background: #0b1324; padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-subtle);">
+                Significance &alpha; = {{ drift_report.alpha }}
             </span>
-            {% if drift_report.status == 'SUCCESS' %}
-                {% if drift_report.drift_detected %}
-                <span style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 600;">
-                    Status: DRIFT DETECTED ({{ drift_report.drifted_features_count }}/{{ drift_report.total_tested_features }})
-                </span>
-                {% else %}
-                <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 600;">
-                    Status: ALL FEATURES STABLE
-                </span>
-                {% endif %}
-            {% else %}
-                <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                    Status: {{ drift_report.status }}
-                </span>
-            {% endif %}
         </div>
         {% endif %}
     </div>
 
     {% if drift_report.status == 'INSUFFICIENT_DATA' %}
-    <div style="padding: 1.5rem; background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.3); border-radius: 0.5rem; color: #fcd34d; font-size: 0.9rem;">
-        <strong>Statistical Guard Active:</strong> {{ drift_report.message }} Predictions must reach the statistical sample size threshold before drift hypothesis testing is performed to avoid false positive alarms.
+    <div style="padding: 1.5rem; background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.3); border-radius: 8px; color: #fcd34d; font-size: 0.85rem; line-height: 1.5;">
+        <strong>Statistical Guard Active:</strong> {{ drift_report.message }} 
+        To prevent false-positive alarms from small sample noise, statistical hypothesis tests require at least <strong>{{ drift_report.min_required }}</strong> production inferences. Use the playground or simulation CLI to generate activity.
     </div>
     {% elif drift_report.status == 'SUCCESS' and drift_report.feature_results %}
-    <div style="overflow-x: auto;">
-        <table>
+    <div class="table-responsive">
+        <table class="enterprise-table">
             <thead>
                 <tr>
-                    <th>Feature</th>
+                    <th>Feature Column</th>
                     <th>Statistical Test</th>
-                    <th>Sample Size (Ref / Prod)</th>
+                    <th>Sample Counts (Ref / Prod)</th>
                     <th>Test Statistic</th>
                     <th>p-value</th>
                     <th>Threshold (&alpha;)</th>
-                    <th>Drift Status</th>
+                    <th>Diagnostic Status</th>
                 </tr>
             </thead>
             <tbody>
                 {% for f in drift_report.feature_results %}
                 <tr>
-                    <td style="font-weight: 600; color: #f8fafc;">{{ f.feature }}</td>
-                    <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ f.test }}</td>
-                    <td>{{ f.ref_count }} / {{ f.prod_count }}</td>
-                    <td style="font-family: monospace;">{{ f.statistic }}</td>
-                    <td style="font-family: monospace; font-weight: 600; {% if f.drift_detected %}color: var(--danger);{% else %}color: var(--success);{% endif %}">
-                        {{ f.p_value }}
+                    <td style="font-weight: 600; color: var(--text-main);">
+                        {{ f.feature }}
                     </td>
-                    <td>{{ drift_report.alpha }}</td>
+                    <td style="color: var(--text-muted); font-size: 0.8rem;">
+                        {{ f.test }}
+                    </td>
+                    <td class="mono" style="font-size: 0.8rem;">
+                        {{ f.ref_count|default:"&mdash;" }} / {{ f.prod_count|default:"&mdash;" }}
+                    </td>
+                    <td class="mono" style="font-weight: 500;">
+                        {{ f.statistic|default:"&mdash;" }}
+                    </td>
+                    <td class="mono" style="font-weight: 600; {% if f.drift_detected %}color: var(--danger-rose);{% else %}color: var(--success-green);{% endif %}">
+                        {{ f.p_value|default:"&mdash;" }}
+                    </td>
+                    <td class="mono" style="color: var(--text-faint);">
+                        {{ drift_report.alpha }}
+                    </td>
                     <td>
                         {% if f.drift_detected %}
-                        <span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                        <span class="badge badge-danger">
                             DRIFT DETECTED
                         </span>
                         {% else %}
-                        <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                        <span class="badge badge-success">
                             STABLE
                         </span>
                         {% endif %}
@@ -218,188 +232,207 @@
             </tbody>
         </table>
     </div>
-    {% elif drift_report.message %}
-    <div style="padding: 1.5rem; color: var(--text-secondary); text-align: center;">
+    {% else %}
+    <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
         {{ drift_report.message }}
     </div>
     {% endif %}
 
-    <div style="margin-top: 1.5rem; padding: 0.85rem 1.25rem; background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; border-radius: 0 0.5rem 0.5rem 0; font-size: 0.825rem; color: #94a3b8; line-height: 1.5;">
-        <strong style="color: #93c5fd;">Important MLOps Note:</strong> {{ drift_report.performance_disclaimer }}
+    <!-- Crucial Viva MLOps Disclaimer Box -->
+    <div style="margin-top: 1.25rem; padding: 0.85rem 1.15rem; background: rgba(59, 130, 246, 0.05); border-left: 3px solid var(--accent-blue); border-radius: 0 6px 6px 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+        <strong style="color: #93c5fd;">MLOps Observability Note:</strong> {{ drift_report.performance_disclaimer }}
     </div>
 </div>
 
-<div class="glass-card" style="margin-top: 2rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+<!-- Dataset Baseline Profiling (Pandas Stats) -->
+{% if dataset_stats.numeric_stats %}
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
         <div>
-            <h3 style="margin-bottom: 0.25rem;">📊 Dataset Statistical Analysis (Pandas)</h3>
-            <p class="text-secondary" style="margin: 0; font-size: 0.875rem;">Calculated directly from the training dataset using Pandas (min, max, mean/avg, standard deviation, median, quartiles).</p>
+            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Baseline Training Data Profile</h2>
+            <p style="color: var(--text-muted); font-size: 0.8rem;">Descriptive statistical properties computed from the training dataset.</p>
         </div>
         {% if dataset_stats.overview %}
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <span style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                <strong>{{ dataset_stats.overview.total_rows }}</strong> Rows
-            </span>
-            <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                <strong>{{ dataset_stats.overview.total_columns }}</strong> Columns
-            </span>
-            <span style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
-                <strong>{{ dataset_stats.overview.numeric_count }}</strong> Numeric Features
-            </span>
+        <div style="display: flex; gap: 0.5rem; font-size: 0.75rem;">
+            <span class="badge badge-info">{{ dataset_stats.overview.total_rows }} Baseline Rows</span>
+            <span class="badge badge-info">{{ dataset_stats.overview.numeric_count }} Numerical Features</span>
         </div>
         {% endif %}
     </div>
 
-    {% if dataset_stats.numeric_stats %}
-    <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: #94a3b8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em;">
-        Numerical Features (Summary Metrics)
-    </h4>
-    <div style="overflow-x: auto;">
-        <table>
+    <div class="table-responsive">
+        <table class="enterprise-table">
             <thead>
                 <tr>
                     <th>Feature</th>
                     <th>Count</th>
                     <th>Min</th>
-                    <th>Max</th>
-                    <th>Average (Mean)</th>
-                    <th>Std Deviation</th>
-                    <th>Median (50%)</th>
-                    <th>25% (Q1)</th>
-                    <th>75% (Q3)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for stat in dataset_stats.numeric_stats %}
-                <tr>
-                    <td style="font-weight: 600; color: #f8fafc;">{{ stat.column }}</td>
-                    <td>{{ stat.count }}</td>
-                    <td style="color: #60a5fa; font-weight: 500;">{{ stat.min }}</td>
-                    <td style="color: #f43f5e; font-weight: 500;">{{ stat.max }}</td>
-                    <td style="color: #34d399; font-weight: 600;">{{ stat.avg }}</td>
-                    <td style="color: #fbbf24;">{{ stat.std }}</td>
-                    <td>{{ stat.median }}</td>
-                    <td style="color: #94a3b8;">{{ stat.q25 }}</td>
-                    <td style="color: #94a3b8;">{{ stat.q75 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
-    {% if dataset_stats.categorical_stats %}
-    <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: #94a3b8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em;">
-        Categorical Features
-    </h4>
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Feature</th>
-                    <th>Count</th>
-                    <th>Unique Values</th>
-                    <th>Most Frequent (Mode)</th>
-                    <th>Top Value Frequency</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for stat in dataset_stats.categorical_stats %}
-                <tr>
-                    <td style="font-weight: 600; color: #f8fafc;">{{ stat.column }}</td>
-                    <td>{{ stat.count }}</td>
-                    <td style="color: #a78bfa; font-weight: 500;">{{ stat.unique }}</td>
-                    <td style="color: #38bdf8; font-weight: 500;">{{ stat.top_value }}</td>
-                    <td style="color: #94a3b8;">{{ stat.top_freq }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
-    {% if dataset_stats.target_info %}
-    <h4 style="margin-top: 2rem; margin-bottom: 0.75rem; color: #94a3b8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em;">
-        Target Variable Analysis: <span style="color: #38bdf8;">{{ dataset_stats.target_info.name }}</span>
-    </h4>
-    {% if dataset_stats.target_info.type == 'Numeric' %}
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Target Variable</th>
-                    <th>Min</th>
-                    <th>Max</th>
-                    <th>Average (Mean)</th>
-                    <th>Std Deviation</th>
+                    <th>Mean (&mu;)</th>
                     <th>Median</th>
+                    <th>Max</th>
+                    <th>Std Dev (&sigma;)</th>
+                    <th>IQR (25% &bull; 75%)</th>
                 </tr>
             </thead>
             <tbody>
+                {% for s in dataset_stats.numeric_stats %}
                 <tr>
-                    <td style="font-weight: 600; color: #f8fafc;">{{ dataset_stats.target_info.name }}</td>
-                    <td style="color: #60a5fa;">{{ dataset_stats.target_info.min }}</td>
-                    <td style="color: #f43f5e;">{{ dataset_stats.target_info.max }}</td>
-                    <td style="color: #34d399; font-weight: 600;">{{ dataset_stats.target_info.avg }}</td>
-                    <td style="color: #fbbf24;">{{ dataset_stats.target_info.std }}</td>
-                    <td>{{ dataset_stats.target_info.median }}</td>
+                    <td style="font-weight: 600; color: var(--text-main);">{{ s.column }}</td>
+                    <td class="mono" style="font-size: 0.8rem;">{{ s.count }}</td>
+                    <td class="mono" style="color: #93c5fd;">{{ s.min }}</td>
+                    <td class="mono" style="color: #6ee7b7; font-weight: 600;">{{ s.avg }}</td>
+                    <td class="mono">{{ s.median }}</td>
+                    <td class="mono" style="color: #fca5a5;">{{ s.max }}</td>
+                    <td class="mono" style="color: #fcd34d;">{{ s.std }}</td>
+                    <td class="mono" style="color: var(--text-faint); font-size: 0.8rem;">{{ s.q25 }} &bull; {{ s.q75 }}</td>
                 </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Model Inferences Table -->
+<div class="card">
+    <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Recent Model Inferences</h2>
+        <p style="color: var(--text-muted); font-size: 0.8rem;">Last 10 inference transactions for this model instance.</p>
+    </div>
+
+    {% if recent_logs %}
+    <div class="table-responsive">
+        <table class="enterprise-table">
+            <thead>
+                <tr>
+                    <th>Inference Timestamp</th>
+                    <th>Prediction Output</th>
+                    <th>Inference Latency</th>
+                    <th>Payload Preview</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_logs %}
+                <tr>
+                    <td class="mono" style="font-size: 0.8rem; color: var(--text-muted);">
+                        {{ log.timestamp|date:"M d, Y H:i:s" }}
+                    </td>
+                    <td>
+                        {% if 'Approved' in log.prediction_result or 'Retained' in log.prediction_result %}
+                        <span class="badge badge-success">{{ log.prediction_result }}</span>
+                        {% elif 'Rejected' in log.prediction_result or 'Risk' in log.prediction_result %}
+                        <span class="badge badge-danger">{{ log.prediction_result }}</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ log.prediction_result }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="mono">
+                        {{ log.response_time_ms|floatformat:2 }} ms
+                    </td>
+                    <td class="mono" style="font-size: 0.75rem; color: var(--text-faint); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ log.input_data }}
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
     {% else %}
-    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem;">
-        {% for item in dataset_stats.target_info.distribution %}
-        <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 0.5rem; padding: 0.75rem 1.25rem; display: flex; flex-direction: column;">
-            <span style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Class: {{ item.label }}</span>
-            <span style="font-size: 1.25rem; font-weight: 700; color: var(--accent-color);">{{ item.count }} <span style="font-size: 0.8rem; font-weight: 400; color: var(--text-secondary);">instances</span></span>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-    {% endif %}
-
-    {% if not dataset_stats %}
-    <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">
-        <p style="margin: 0;">No dataset statistical summary available for this model yet. When training new models, statistics are computed automatically from the uploaded CSV dataset.</p>
+    <div style="padding: 2rem; text-align: center; color: var(--text-faint); font-size: 0.85rem;">
+        No inference transactions recorded for this model yet.
     </div>
     {% endif %}
 </div>
 
-
+<!-- Chart.js Scripts -->
 <script>
-    const ctx = document.getElementById('latencyChart').getContext('2d');
-    const latencyChart = new Chart(ctx, {
+    // 1. Latency Line Chart
+    const ctxLatency = document.getElementById('latencyChart').getContext('2d');
+    new Chart(ctxLatency, {
         type: 'line',
         data: {
             labels: {{ chart_labels|safe }},
             datasets: [{
-                label: 'Response Time (ms)',
+                label: 'Inference Latency (ms)',
                 data: {{ chart_data|safe }},
                 borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
                 borderWidth: 2,
                 fill: true,
-                tension: 0.4
+                tension: 0.35,
+                pointRadius: 3,
+                pointBackgroundColor: '#3b82f6'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
             scales: {
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#94a3b8' }
+                    grid: { color: 'rgba(255, 255, 255, 0.06)' },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
                 },
                 x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#94a3b8' }
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
                 }
-            },
-            plugins: {
-                legend: { labels: { color: '#f8fafc' } }
             }
         }
     });
+
+    // 2. Feature Distribution Comparison Chart
+    {% if dist_feature_name and dist_bins %}
+    const ctxDist = document.getElementById('distributionChart').getContext('2d');
+    new Chart(ctxDist, {
+        type: 'bar',
+        data: {
+            labels: {{ dist_bins|safe }},
+            datasets: [
+                {
+                    label: 'Baseline Training (%)',
+                    data: {{ dist_ref_pct|safe }},
+                    backgroundColor: 'rgba(59, 130, 246, 0.65)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Live Production (%)',
+                    data: {{ dist_prod_pct|safe }},
+                    backgroundColor: 'rgba(245, 158, 11, 0.65)',
+                    borderColor: '#f59e0b',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#94a3b8', font: { size: 11 } }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Frequency %', color: '#64748b', font: { size: 10 } },
+                    grid: { color: 'rgba(255, 255, 255, 0.06)' },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 9 } }
+                }
+            }
+        }
+    });
+    {% endif %}
 </script>
 {% endblock %}

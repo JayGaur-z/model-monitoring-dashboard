@@ -1,84 +1,83 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<style>
-    .form-container {
-        max-width: 600px;
-        margin: 0 auto;
-    }
-    
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-    
-    label {
-        display: block;
-        margin-bottom: 0.5rem;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-    
-    input[type="text"], input[type="file"] {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border-radius: 0.5rem;
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid var(--glass-border);
-        color: white;
-        font-size: 1rem;
-        box-sizing: border-box;
-    }
-    
-    input[type="text"]:focus, input[type="file"]:focus {
-        outline: none;
-        border-color: var(--accent-color);
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-    
-    .error-msg {
-        color: var(--danger);
-        margin-bottom: 1.5rem;
-        padding: 1rem;
-        background: rgba(239, 68, 68, 0.1);
-        border-radius: 0.5rem;
-        border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-    
-    .info-box {
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-        font-size: 0.875rem;
-        color: #93c5fd;
-    }
-</style>
+{% block title %}Deploy New Model — MLOps Sentinel{% endblock %}
 
-<div class="form-container">
-    <div class="glass-card">
-        <h2 style="margin-bottom: 1rem;">AutoML Model Builder</h2>
-        
-        <div class="info-box">
-            <strong>How it works:</strong> Upload any tabular CSV. The system assumes the <em>last column</em> is the target variable to predict. It will automatically preprocess the data, train a RandomForest model, and deploy it.
+{% block content %}
+<div class="breadcrumbs">
+    <a href="{% url 'dashboard' %}">Model Registry</a>
+    <span>/</span>
+    <span style="color: var(--text-main);">Train & Deploy Model</span>
+</div>
+
+<div style="max-width: 720px; margin: 0 auto;">
+    <div style="margin-bottom: 1.5rem;">
+        <h1 style="font-size: 1.65rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.35rem;">AutoML Model Training Pipeline</h1>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">
+            Upload a reference CSV dataset to train and register a new scikit-learn Random Forest classifier into the monitoring registry.
+        </p>
+    </div>
+
+    <!-- Instructions / Specifications Card -->
+    <div class="card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-medium); margin-bottom: 1.5rem; padding: 1.25rem;">
+        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <div style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 0.4rem; color: #93c5fd; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </div>
+            <div>
+                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.35rem;">Automated Ingestion Specifications</div>
+                <ul style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; margin-left: 1.1rem;">
+                    <li><strong>Target Variable:</strong> The system automatically designates the <em>last column</em> of the CSV as the prediction target.</li>
+                    <li><strong>ID Column Stripping:</strong> Standard identifier fields (<code class="mono" style="font-size: 0.75rem;">id</code>, <code class="mono" style="font-size: 0.75rem;">CustomerID</code>, <code class="mono" style="font-size: 0.75rem;">loan_id</code>) are automatically pruned to prevent artificial leakage.</li>
+                    <li><strong>Categorical Features:</strong> Automatically encoded via one-hot dummy variables (<code class="mono" style="font-size: 0.75rem;">pd.get_dummies</code>).</li>
+                    <li><strong>Model Artifact:</strong> Serialized with Joblib as a 100-estimator Random Forest classifier and registered in the database for real-time drift monitoring.</li>
+                </ul>
+            </div>
         </div>
-        
-        {% if error %}
-        <div class="error-msg">{{ error }}</div>
-        {% endif %}
-        
+    </div>
+
+    {% if error %}
+    <div class="alert-banner danger">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <div>
+            <div style="font-weight: 600; font-size: 0.875rem;">Model Training Failed</div>
+            <div style="font-size: 0.8rem; margin-top: 0.2rem;">{{ error }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Upload Form Card -->
+    <div class="card">
         <form method="POST" enctype="multipart/form-data">
             {% csrf_token %}
-            <div class="form-group">
-                <label for="model_name">Model Name</label>
-                <input type="text" name="model_name" id="model_name" required placeholder="e.g., Customer_Churn_Predictor">
-            </div>
-            <div class="form-group">
-                <label for="csv_file">Upload Training Dataset (.csv)</label>
-                <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
-            </div>
             
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Train & Deploy Model</button>
+            <div class="form-group">
+                <label class="form-label" for="model_name">Model Identifier Name <span style="color: var(--danger-rose);">*</span></label>
+                <input type="text" name="model_name" id="model_name" class="form-control mono" required placeholder="e.g. Credit_Default_Predictor">
+                <div style="font-size: 0.75rem; color: var(--text-faint); margin-top: 0.35rem;">
+                    Unique alphanumeric identifier used for routing predictions, storage filenames, and monitoring metrics.
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label class="form-label" for="csv_file">Training & Reference Dataset (.csv) <span style="color: var(--danger-rose);">*</span></label>
+                <div style="position: relative;">
+                    <input type="file" name="csv_file" id="csv_file" accept=".csv" class="form-control" required style="padding: 0.6rem 0.85rem; cursor: pointer;">
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-faint); margin-top: 0.35rem;">
+                    CSV file containing header names. This file will be stored in <code class="mono" style="font-size: 0.75rem;">saved_datasets/</code> and serve as the statistical baseline for Kolmogorov-Smirnov and Chi-Square drift calculations.
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 1.25rem;">
+                <a href="{% url 'dashboard' %}" class="btn btn-outline">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Train & Register Model
+                </button>
+            </div>
         </form>
     </div>
 </div>

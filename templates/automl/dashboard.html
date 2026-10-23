@@ -1,83 +1,213 @@
 {% extends 'base.html' %}
 
+{% block title %}Model Registry & Observability Dashboard — MLOps Sentinel{% endblock %}
+
 {% block content %}
-<style>
-    .header-section {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 3rem;
-    }
-    
-    .models-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-        gap: 2rem;
-    }
-
-    .model-card {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .model-card h3 {
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .model-info {
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .model-actions {
-        display: flex;
-        gap: 1rem;
-        margin-top: auto;
-    }
-    
-    .empty-state {
-        text-align: center;
-        padding: 4rem 2rem;
-    }
-    
-    .empty-state h2 {
-        color: var(--text-secondary);
-        margin-bottom: 1.5rem;
-    }
-</style>
-
-<div class="header-section">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
     <div>
-        <h1>Global Models Dashboard</h1>
-        <p class="text-secondary">View and monitor all your automatically trained Scikit-Learn models.</p>
+        <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--text-main); letter-spacing: -0.02em; margin-bottom: 0.25rem;">
+            Model Registry & Health Overview
+        </h1>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">
+            Production ML model inventory, real-time inference throughput, SLA latency tracking, and statistical covariate shift detection.
+        </p>
     </div>
-    <a href="{% url 'build_model' %}" class="btn btn-primary">Train New Model</a>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{% url 'build_model' %}" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Deploy New Model
+        </a>
+    </div>
 </div>
 
-{% if models %}
-<div class="models-grid">
-    {% for model in models %}
-    <div class="glass-card model-card">
-        <h3>{{ model.model_name }}</h3>
-        <div class="model-info">
-            <p><strong>Target:</strong> {{ model.target_column }}</p>
-            <p><strong>Features:</strong> {{ model.feature_columns|length }} columns</p>
-            <p><strong>Created:</strong> {{ model.created_at|date:"M d, Y" }}</p>
+<!-- Top Platform KPIs -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <span class="kpi-label">Active Models</span>
+        <span class="kpi-value">{{ total_models_count }}</span>
+        <span class="kpi-subtext">Registered in production catalog</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-label">Total Predictions</span>
+        <span class="kpi-value">{{ total_predictions_count }}</span>
+        <span class="kpi-subtext">Logged inference events</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-label">Platform Avg Latency</span>
+        <span class="kpi-value">{{ system_avg_latency }}<span style="font-size: 1rem; color: var(--text-muted);"> ms</span></span>
+        <span class="kpi-subtext">System-wide compute SLA</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-label">Drift Status</span>
+        {% if active_drift_alerts_count > 0 %}
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+            <span class="kpi-value" style="color: var(--danger-rose);">{{ active_drift_alerts_count }}</span>
+            <span class="badge badge-danger">Drift Alert Active</span>
         </div>
-        <div class="model-actions">
-            <a href="{% url 'predict' model.model_name %}" class="btn btn-primary" style="flex: 1;">Predict</a>
-            <a href="{% url 'monitor' model.model_name %}" class="btn btn-outline" style="flex: 1;">Monitor</a>
+        <span class="kpi-subtext">Models require review/retraining</span>
+        {% else %}
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+            <span class="kpi-value" style="color: var(--success-green);">0</span>
+            <span class="badge badge-success">All Distributions Stable</span>
+        </div>
+        <span class="kpi-subtext">No significant feature shifts detected</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Model Inventory Section -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div>
+            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Deployed Model Catalog</h2>
+            <p style="color: var(--text-muted); font-size: 0.8rem;">Select a model to view statistical distribution charts or run inference simulations.</p>
         </div>
     </div>
-    {% endfor %}
+
+    {% if model_cards %}
+    <div class="table-responsive">
+        <table class="enterprise-table">
+            <thead>
+                <tr>
+                    <th>Model Identifier</th>
+                    <th>Target Variable</th>
+                    <th>Input Schema</th>
+                    <th>Total Inferences</th>
+                    <th>Mean Latency</th>
+                    <th>Data Drift Status</th>
+                    <th style="text-align: right;">Operations</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in model_cards %}
+                <tr>
+                    <td>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-weight: 600; color: var(--text-main); font-size: 0.95rem;">
+                                {{ item.obj.model_name }}
+                            </span>
+                            <span style="font-size: 0.75rem; color: var(--text-faint);">
+                                Deployed: {{ item.obj.created_at|date:"M d, Y" }}
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="mono" style="color: #93c5fd; background: rgba(59, 130, 246, 0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
+                            {{ item.obj.target_column }}
+                        </span>
+                    </td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">
+                        {{ item.total_features }} features
+                    </td>
+                    <td class="mono" style="font-weight: 600;">
+                        {{ item.prediction_count }}
+                    </td>
+                    <td class="mono">
+                        {% if item.avg_latency > 0 %}
+                            {{ item.avg_latency }} ms
+                        {% else %}
+                            <span style="color: var(--text-faint);">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.drift_status == 'SUCCESS' %}
+                            {% if item.drift_detected %}
+                                <span class="badge badge-danger">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                    Drift ({{ item.drifted_count }} feat.)
+                                </span>
+                            {% else %}
+                                <span class="badge badge-success">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    Stable
+                                </span>
+                            {% endif %}
+                        {% elif item.drift_status == 'INSUFFICIENT_DATA' %}
+                            <span class="badge badge-warning">
+                                Insufficient Data (< 25)
+                            </span>
+                        {% else %}
+                            <span class="badge badge-info">
+                                Baseline Pending
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <div style="display: inline-flex; gap: 0.5rem;">
+                            <a href="{% url 'monitor' item.obj.model_name %}" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+                                Monitor
+                            </a>
+                            <a href="{% url 'predict' item.obj.model_name %}" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+                                Playground
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1.5rem;">
+        <h3 style="color: var(--text-muted); margin-bottom: 0.75rem;">No Models Deployed Yet</h3>
+        <p style="color: var(--text-faint); margin-bottom: 1.5rem; font-size: 0.875rem;">Train a model using the Loan Approval dataset or upload a custom CSV dataset to begin monitoring.</p>
+        <a href="{% url 'build_model' %}" class="btn btn-primary">Open Model Builder</a>
+    </div>
+    {% endif %}
 </div>
-{% else %}
-<div class="glass-card empty-state">
-    <h2>No models trained yet</h2>
-    <p class="text-secondary" style="margin-bottom: 2rem;">Upload a CSV dataset to train your first model automatically.</p>
-    <a href="{% url 'build_model' %}" class="btn btn-primary">Go to Model Builder</a>
+
+<!-- Live Production Feed Section -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div>
+            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Recent Platform Inferences</h2>
+            <p style="color: var(--text-muted); font-size: 0.8rem;">Real-time stream of prediction events captured by the monitoring middleware.</p>
+        </div>
+    </div>
+
+    {% if recent_global_logs %}
+    <div class="table-responsive">
+        <table class="enterprise-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Target Model</th>
+                    <th>Prediction Output</th>
+                    <th>Inference Latency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_global_logs %}
+                <tr>
+                    <td class="mono" style="font-size: 0.8rem; color: var(--text-muted);">
+                        {{ log.timestamp|date:"M d, Y H:i:s" }}
+                    </td>
+                    <td>
+                        <span style="font-weight: 600; color: var(--text-main);">
+                            {{ log.trained_model.model_name }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if 'Approved' in log.prediction_result or 'Retained' in log.prediction_result %}
+                        <span class="badge badge-success">{{ log.prediction_result }}</span>
+                        {% elif 'Rejected' in log.prediction_result or 'Risk' in log.prediction_result %}
+                        <span class="badge badge-danger">{{ log.prediction_result }}</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ log.prediction_result }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="mono">
+                        {{ log.response_time_ms|floatformat:2 }} ms
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2rem; color: var(--text-faint); font-size: 0.875rem;">
+        No inference logs recorded yet. Use the model playground or run the simulation command to generate activity.
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 {% endblock %}

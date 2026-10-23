@@ -1,129 +1,210 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<style>
-    .header-section {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-    
-    .form-container {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-    }
-    
-    @media (max-width: 768px) {
-        .form-container {
-            grid-template-columns: 1fr;
-        }
-    }
-    
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1rem;
-    }
-    
-    .form-group {
-        margin-bottom: 1rem;
-    }
-    
-    label {
-        display: block;
-        margin-bottom: 0.25rem;
-        color: var(--text-secondary);
-        font-weight: 500;
-        font-size: 0.875rem;
-        word-break: break-all;
-    }
-    
-    input[type="number"], input[type="text"] {
-        width: 100%;
-        padding: 0.5rem 0.75rem;
-        border-radius: 0.375rem;
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid var(--glass-border);
-        color: white;
-        font-size: 0.875rem;
-        box-sizing: border-box;
-    }
-    
-    input:focus {
-        outline: none;
-        border-color: var(--accent-color);
-    }
-    
-    .result-card {
-        background: rgba(16, 185, 129, 0.1);
-        border-color: rgba(16, 185, 129, 0.2);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        height: 100%;
-        min-height: 200px;
-    }
-    
-    .result-value {
-        font-size: 3rem;
-        font-weight: 700;
-        color: var(--success);
-        margin: 1rem 0;
-    }
-    
-    .error-msg {
-        color: var(--danger);
-        margin-bottom: 1rem;
-        padding: 1rem;
-        background: rgba(239, 68, 68, 0.1);
-        border-radius: 0.5rem;
-    }
-</style>
+{% block title %}Inference Playground: {{ model.model_name }} — MLOps Sentinel{% endblock %}
 
-<div class="header-section">
-    <div>
-        <a href="{% url 'dashboard' %}" class="text-secondary" style="text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">&larr; Back to Dashboard</a>
-        <h1>{{ model.model_name }}</h1>
-        <p class="text-secondary">Predicting target: <strong>{{ model.target_column }}</strong></p>
-    </div>
+{% block content %}
+<div class="breadcrumbs">
+    <a href="{% url 'dashboard' %}">Model Registry</a>
+    <span>/</span>
+    <span style="color: var(--text-main);">{{ model.model_name }}</span>
+    <span>/</span>
+    <span>Inference Playground</span>
 </div>
 
-<div class="form-container">
-    <div class="glass-card">
-        <h3 style="margin-bottom: 1.5rem;">Input Features</h3>
-        
-        {% if error %}
-        <div class="error-msg">{{ error }}</div>
-        {% endif %}
-        
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+            <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--text-main); letter-spacing: -0.02em;">
+                Inference Playground: {{ model.model_name }}
+            </h1>
+            <span class="badge badge-info" style="font-size: 0.8rem;">
+                Target: {{ model.target_column }}
+            </span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.875rem;">
+            Submit real-time feature payloads to test prediction execution and automatically append events to the monitoring stream.
+        </p>
+    </div>
+    <a href="{% url 'monitor' model.model_name %}" class="btn btn-secondary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        View Model Monitoring
+    </a>
+</div>
+
+{% if error %}
+<div class="alert-banner danger">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    <div>
+        <strong style="color: #f87171;">Inference Error</strong>
+        <p style="font-size: 0.85rem; margin-top: 0.2rem;">{{ error }}</p>
+    </div>
+</div>
+{% endif %}
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 1.5rem; align-items: start;">
+    
+    <!-- Left: Model-Aware Form -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+            <div>
+                <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Feature Input Payload</h2>
+                <p style="color: var(--text-muted); font-size: 0.8rem;">Values are aligned strictly with the trained model's feature schema.</p>
+            </div>
+            <span class="badge badge-info">{{ features|length }} Expected Features</span>
+        </div>
+
         <form method="POST">
             {% csrf_token %}
-            <div class="form-grid">
-                {% for feature in features %}
+
+            {% if is_loan_model %}
+            <!-- Specialized Loan Approval Form Controls -->
+            <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);">
+                <h3 style="font-size: 0.85rem; text-transform: uppercase; color: #93c5fd; letter-spacing: 0.05em; margin-bottom: 0.85rem;">
+                    1. Applicant Background & Credit Profile
+                </h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">CIBIL / Credit Score (300 &ndash; 900)</label>
+                        <input type="number" name="cibil_score" class="form-control" required min="300" max="900" value="750" placeholder="e.g. 750">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Number of Dependents</label>
+                        <input type="number" name="no_of_dependents" class="form-control" required min="0" max="10" value="2">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Education Status</label>
+                        <select name="friendly_education" class="form-select">
+                            <option value="Graduate" selected>Graduate</option>
+                            <option value="Not Graduate">Not Graduate</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Employment Classification</label>
+                        <select name="friendly_self_employed" class="form-select">
+                            <option value="No" selected>Salaried / Employed</option>
+                            <option value="Yes">Self-Employed / Business Owner</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);">
+                <h3 style="font-size: 0.85rem; text-transform: uppercase; color: #93c5fd; letter-spacing: 0.05em; margin-bottom: 0.85rem;">
+                    2. Loan & Income Specifications (INR)
+                </h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Annual Income (&rupee;)</label>
+                        <input type="number" step="any" name="income_annum" class="form-control" required value="7500000" placeholder="e.g. 7,500,000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Loan Amount Requested (&rupee;)</label>
+                        <input type="number" step="any" name="loan_amount" class="form-control" required value="18000000" placeholder="e.g. 18,000,000">
+                    </div>
+                    <div class="form-group" style="grid-column: span 2;">
+                        <label class="form-label">Loan Term (Years)</label>
+                        <input type="number" name="loan_term" class="form-control" required min="1" max="30" value="12">
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h3 style="font-size: 0.85rem; text-transform: uppercase; color: #93c5fd; letter-spacing: 0.05em; margin-bottom: 0.85rem;">
+                    3. Collateral & Asset Portfolio (&rupee;)
+                </h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Residential Assets Value</label>
+                        <input type="number" step="any" name="residential_assets_value" class="form-control" required value="3500000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Commercial Assets Value</label>
+                        <input type="number" step="any" name="commercial_assets_value" class="form-control" required value="2000000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Luxury Assets Value</label>
+                        <input type="number" step="any" name="luxury_assets_value" class="form-control" required value="15000000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Bank Asset / Savings Value</label>
+                        <input type="number" step="any" name="bank_asset_value" class="form-control" required value="4000000">
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Generic Clean Grid for Other Models (Customer Churn, House Price, etc.) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                {% for f in features %}
                 <div class="form-group">
-                    <label for="{{ feature }}">{{ feature }}</label>
-                    <input type="number" step="any" name="{{ feature }}" id="{{ feature }}" required value="0">
+                    <label class="form-label" style="word-break: break-all;">{{ f }}</label>
+                    <input type="number" step="any" name="{{ f }}" class="form-control" required value="1.0">
                 </div>
                 {% endfor %}
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Run Prediction</button>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.95rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Execute Real-Time Model Inference
+            </button>
         </form>
     </div>
 
+    <!-- Right: Prediction Verdict & Response Telemetry -->
     <div>
         {% if prediction %}
-        <div class="glass-card result-card">
-            <p class="text-secondary">Predicted Result</p>
-            <div class="result-value">{{ prediction }}</div>
-            <p class="text-secondary" style="font-size: 0.875rem;">Response Time: {{ response_time_ms }} ms</p>
+        <div class="card" style="border-color: {% if is_positive_outcome %}rgba(16, 185, 129, 0.4){% else %}rgba(239, 68, 68, 0.4){% endif %};">
+            <span class="kpi-label">Model Verdict</span>
+            
+            <div style="margin: 1.25rem 0; text-align: center;">
+                {% if is_positive_outcome %}
+                <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); color: #34d399; margin-bottom: 0.75rem;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <h3 style="font-size: 1.75rem; font-weight: 800; color: #34d399; letter-spacing: -0.01em;">
+                    {{ prediction }}
+                </h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+                    Decision criteria met under model classification boundaries.
+                </p>
+                {% else %}
+                <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #f87171; margin-bottom: 0.75rem;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+                <h3 style="font-size: 1.75rem; font-weight: 800; color: #f87171; letter-spacing: -0.01em;">
+                    {{ prediction }}
+                </h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+                    Risk boundaries exceeded based on submitted feature payload.
+                </p>
+                {% endif %}
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; padding: 1rem; background: #0b1324; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 1.25rem;">
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--text-faint); display: block;">Latency</span>
+                    <span class="mono" style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">{{ response_time_ms }} ms</span>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--text-faint); display: block;">Raw Model Output</span>
+                    <span class="mono" style="font-weight: 600; font-size: 0.95rem; color: #93c5fd;">{{ raw_prediction }}</span>
+                </div>
+            </div>
+
+            <div style="font-size: 0.8rem; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+                <strong>Observation:</strong> This prediction event was recorded in the database and is factored into live SLA metrics and data drift monitoring.
+            </div>
         </div>
         {% else %}
-        <div class="glass-card" style="height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.5;">
-            <p>Submit the form to see prediction results.</p>
+        <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 380px; color: var(--text-muted);">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(59, 130, 246, 0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: #60a5fa;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </div>
+            <h3 style="color: var(--text-main); font-size: 1.1rem; margin-bottom: 0.5rem;">Awaiting Input Payload</h3>
+            <p style="font-size: 0.85rem; max-width: 280px; line-height: 1.4; color: var(--text-faint);">
+                Fill in the feature values on the left and submit to trigger model inference and view latency telemetry.
+            </p>
         </div>
         {% endif %}
     </div>

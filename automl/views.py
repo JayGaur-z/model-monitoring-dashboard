@@ -78,21 +78,66 @@ def build_model(request):
 
 def dashboard(request):
     models = TrainedModel.objects.all().order_by('-created_at')
-    return render(request, 'automl/dashboard.html', {'models': models})
+    total_models_count = models.count()
+    total_predictions_count = PredictionLog.objects.count()
+    system_avg_latency = PredictionLog.objects.aggregate(Avg('response_time_ms'))['response_time_ms__avg'] or 0
+
+    model_cards = []
+    active_drift_alerts_count = 0
+    for m in models:
+        pred_count = m.logs.count()
+        m_avg_latency = m.logs.aggregate(Avg('response_time_ms'))['response_time_ms__avg'] or 0
+        drift_info = detect_data_drift(m, sample_window=50, min_samples=25)
+        if drift_info.get('drift_detected', False):
+            active_drift_alerts_count += 1
+        model_cards.append({
+            'obj': m,
+            'prediction_count': pred_count,
+            'avg_latency': round(m_avg_latency, 2),
+            'drift_status': drift_info.get('status', 'NO_DATA'),
+            'drift_detected': drift_info.get('drift_detected', False),
+            'drift_message': drift_info.get('message', ''),
+            'drifted_count': drift_info.get('drifted_features_count', 0),
+            'total_features': len(m.feature_columns) if m.feature_columns else 0
+        })
+
+    recent_global_logs = PredictionLog.objects.select_related('trained_model').order_by('-timestamp')[:8]
+
+    context = {
+        'models': models,
+        'model_cards': model_cards,
+        'total_models_count': total_models_count,
+        'total_predictions_count': total_predictions_count,
+        'system_avg_latency': round(system_avg_latency, 2),
+        'active_drift_alerts_count': active_drift_alerts_count,
+        'recent_global_logs': recent_global_logs,
+    }
+    return render(request, 'automl/dashboard.html', context)
 
 def predict(request, model_name):
     model_obj = get_object_or_404(TrainedModel, model_name=model_name)
     features = model_obj.feature_columns
+    is_loan_model = (model_name == 'Loan_Approval_Model')
     
     if request.method == 'POST':
         start_time = time.time()
         input_data = {}
+
+        # Handle friendly categorical dropdown values
+        friendly_education = request.POST.get('friendly_education')
+        friendly_self_employed = request.POST.get('friendly_self_employed')
+
         for f in features:
-            val = request.POST.get(f)
-            try:
-                input_data[f] = float(val) if val else 0.0
-            except ValueError:
-                input_data[f] = 0.0
+            if f == 'education_ Not Graduate' and friendly_education:
+                input_data[f] = 1.0 if friendly_education == 'Not Graduate' else 0.0
+            elif f == 'self_employed_ Yes' and friendly_self_employed:
+                input_data[f] = 1.0 if friendly_self_employed == 'Yes' else 0.0
+            else:
+                val = request.POST.get(f)
+                try:
+                    input_data[f] = float(val) if val is not None and val != '' else 0.0
+                except ValueError:
+                    input_data[f] = 0.0
                 
         try:
             clf = joblib.load(model_obj.get_absolute_pkl_path())
@@ -103,28 +148,56 @@ def predict(request, model_name):
             
             end_time = time.time()
             response_time_ms = (end_time - start_time) * 1000
+
+            prediction_str = str(prediction)
+            friendly_label = prediction_str
+            is_positive_outcome = True
+
+            if is_loan_model:
+                if str(prediction) in ['0', '0.0', 'Approved', ' Approved']:
+                    friendly_label = 'Approved'
+                    is_positive_outcome = True
+                else:
+                    friendly_label = 'Rejected'
+                    is_positive_outcome = False
+            elif 'churn' in model_name.lower():
+                if str(prediction) in ['1', '1.0', 'Churn', '1']:
+                    friendly_label = 'High Churn Risk'
+                    is_positive_outcome = False
+                else:
+                    friendly_label = 'Retained (Low Risk)'
+                    is_positive_outcome = True
             
             PredictionLog.objects.create(
                 trained_model=model_obj,
                 input_data=input_data,
-                prediction_result=str(prediction),
+                prediction_result=friendly_label,
                 response_time_ms=response_time_ms
             )
             
             return render(request, 'automl/predict.html', {
                 'model': model_obj, 
-                'features': features, 
-                'prediction': prediction,
-                'response_time_ms': round(response_time_ms, 2)
+                'features': features,
+                'is_loan_model': is_loan_model,
+                'prediction': friendly_label,
+                'raw_prediction': prediction_str,
+                'is_positive_outcome': is_positive_outcome,
+                'response_time_ms': round(response_time_ms, 2),
+                'submitted_inputs': input_data,
             })
         except Exception as e:
             return render(request, 'automl/predict.html', {
                 'model': model_obj, 
-                'features': features, 
+                'features': features,
+                'is_loan_model': is_loan_model,
                 'error': f'Prediction failed: {str(e)}'
             })
             
-    return render(request, 'automl/predict.html', {'model': model_obj, 'features': features})
+    return render(request, 'automl/predict.html', {
+        'model': model_obj,
+        'features': features,
+        'is_loan_model': is_loan_model
+    })
 
 def monitor(request, model_name):
     model_obj = get_object_or_404(TrainedModel, model_name=model_name)
@@ -133,6 +206,10 @@ def monitor(request, model_name):
     total_predictions = logs.count()
     avg_response_time = logs.aggregate(Avg('response_time_ms'))['response_time_ms__avg'] or 0
     recent_logs = logs[:10]
+
+    # Compute P95 latency
+    all_latencies = sorted([log.response_time_ms for log in logs[:100]])
+    p95_latency = all_latencies[int(len(all_latencies) * 0.95)] if all_latencies else avg_response_time
     
     # 1. Latency SLA Alert (System / DevOps performance)
     latency_alert = bool(total_predictions > 0 and avg_response_time > 500)
@@ -143,24 +220,61 @@ def monitor(request, model_name):
         
     logs_for_chart = list(recent_logs[:20])
     chart_labels = [log.timestamp.strftime("%H:%M:%S") for log in reversed(logs_for_chart)]
-    chart_data = [log.response_time_ms for log in reversed(logs_for_chart)]
+    chart_data = [round(log.response_time_ms, 2) for log in reversed(logs_for_chart)]
 
     # Fetch dataset statistics
     dataset_stats = model_obj.dataset_stats
     dataset_path = model_obj.get_absolute_dataset_path()
-    if not dataset_stats and dataset_path and os.path.exists(dataset_path):
+    df_raw = None
+    if dataset_path and os.path.exists(dataset_path):
         try:
-            df = pd.read_csv(dataset_path)
-            dataset_stats = compute_dataset_stats(df, target_col=model_obj.target_column)
-            model_obj.dataset_stats = dataset_stats
-            model_obj.save(update_fields=['dataset_stats'])
+            df_raw = pd.read_csv(dataset_path)
+            df_raw.columns = df_raw.columns.str.strip()
+            if not dataset_stats:
+                dataset_stats = compute_dataset_stats(df_raw, target_col=model_obj.target_column)
+                model_obj.dataset_stats = dataset_stats
+                model_obj.save(update_fields=['dataset_stats'])
         except Exception:
             dataset_stats = None
+
+    # Compute Distribution Comparison Data for a primary numerical feature
+    dist_feature_name = None
+    dist_bins = []
+    dist_ref_pct = []
+    dist_prod_pct = []
+
+    if df_raw is not None and total_predictions >= 10:
+        # Choose target feature for distribution comparison
+        candidate_features = ['cibil_score', 'income_annum', 'loan_amount', 'Age', 'Total Spend', 'area']
+        for cand in candidate_features:
+            if cand in df_raw.columns and cand in model_obj.feature_columns:
+                dist_feature_name = cand
+                break
+        if not dist_feature_name and model_obj.feature_columns:
+            dist_feature_name = model_obj.feature_columns[0]
+
+        if dist_feature_name and dist_feature_name in df_raw.columns:
+            try:
+                ref_s = pd.to_numeric(df_raw[dist_feature_name], errors='coerce').dropna()
+                prod_vals = [log.input_data.get(dist_feature_name) for log in logs[:100] if log.input_data and dist_feature_name in log.input_data]
+                prod_s = pd.to_numeric(pd.Series(prod_vals), errors='coerce').dropna()
+
+                if len(ref_s) >= 10 and len(prod_s) >= 5 and ref_s.nunique() > 1:
+                    import numpy as np
+                    bins = np.linspace(ref_s.min(), ref_s.max(), 7)
+                    ref_counts, _ = np.histogram(ref_s, bins=bins)
+                    prod_counts, _ = np.histogram(prod_s, bins=bins)
+                    dist_bins = [f"{int(bins[i]):,}-{int(bins[i+1]):,}" for i in range(len(bins)-1)]
+                    dist_ref_pct = [round(float(c / len(ref_s) * 100), 1) for c in ref_counts]
+                    dist_prod_pct = [round(float(c / len(prod_s) * 100), 1) for c in prod_counts]
+            except Exception:
+                dist_feature_name = None
 
     context = {
         'model': model_obj,
         'total_predictions': total_predictions,
         'avg_response_time': round(avg_response_time, 2),
+        'p95_latency': round(p95_latency, 2),
         'recent_logs': recent_logs,
         'latency_alert': latency_alert,
         'drift_alert': drift_alert,
@@ -168,6 +282,10 @@ def monitor(request, model_name):
         'chart_labels': chart_labels,
         'chart_data': chart_data,
         'dataset_stats': dataset_stats,
+        'dist_feature_name': dist_feature_name,
+        'dist_bins': dist_bins,
+        'dist_ref_pct': dist_ref_pct,
+        'dist_prod_pct': dist_prod_pct,
     }
     return render(request, 'automl/monitor.html', context)
 
