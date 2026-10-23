@@ -35,8 +35,8 @@ def build_model(request):
         df[target_col] = df[target_col].astype(str)
         
         X = df[feature_cols]
-        # Ignore CustomerID if present, it's just an index usually
-        X = X.drop(columns=['CustomerID'], errors='ignore')
+        # Ignore ID columns if present (e.g. CustomerID, loan_id)
+        X = X.drop(columns=['CustomerID', 'loan_id', 'Loan_ID', 'id', 'ID'], errors='ignore')
         y = df[target_col]
         
         # Basic encoding for categorical

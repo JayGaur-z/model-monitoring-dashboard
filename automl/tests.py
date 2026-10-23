@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 from django.test import TestCase, Client
@@ -146,3 +147,58 @@ class StatisticalDriftUnitTests(TestCase):
         self.assertTrue(response.context['latency_alert'])
         self.assertFalse(response.context['drift_alert'])
         self.assertEqual(response.context['drift_report']['status'], 'INSUFFICIENT_DATA')
+
+    def _get_or_create_loan_model(self):
+        model = TrainedModel.objects.filter(model_name="Loan_Approval_Model").first()
+        if not model:
+            feature_cols = [
+                'no_of_dependents', 'income_annum', 'loan_amount', 'loan_term',
+                'cibil_score', 'residential_assets_value', 'commercial_assets_value',
+                'luxury_assets_value', 'bank_asset_value', 'education_ Not Graduate', 'self_employed_ Yes'
+            ]
+            model = TrainedModel.objects.create(
+                model_name="Loan_Approval_Model",
+                pkl_file_path=os.path.join('saved_models', 'Loan_Approval_Model.pkl'),
+                dataset_file_path=os.path.join('saved_datasets', 'loan_approval_dataset.csv'),
+                feature_columns=feature_cols,
+                target_column='loan_status'
+            )
+        return model
+
+    def test_loan_approval_model_pipeline_and_prediction(self):
+        """Verifies Loan_Approval_Model loads cleanly from disk and executes predictions without errors."""
+        model = self._get_or_create_loan_model()
+        pkl_path = model.get_absolute_pkl_path()
+        self.assertTrue(os.path.exists(pkl_path), f"Model file must exist at {pkl_path}")
+
+        import joblib
+        clf = joblib.load(pkl_path)
+        sample_input = {f: 1.0 for f in model.feature_columns}
+        input_df = pd.DataFrame([sample_input])[model.feature_columns]
+        pred = clf.predict(input_df)[0]
+        self.assertIn(str(pred), ['0', '1', '0.0', '1.0'])
+
+    def test_simulate_drift_command_detects_deliberate_shift(self):
+        """Verifies simulate_drift command generates stable outputs in normal mode and detects drift in drifted mode."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        model = self._get_or_create_loan_model()
+
+        out = StringIO()
+        # Test Normal Mode
+        call_command('simulate_drift', model='Loan_Approval_Model', mode='normal', count=40, clear_existing=True, stdout=out)
+        report_normal = detect_data_drift(model, sample_window=40)
+        self.assertEqual(report_normal['status'], 'SUCCESS')
+        self.assertFalse(report_normal['drift_detected'], "Normal mode should not trigger overall drift alert")
+
+        # Test Drifted Mode
+        call_command('simulate_drift', model='Loan_Approval_Model', mode='drifted', count=40, clear_existing=True, stdout=out)
+        report_drifted = detect_data_drift(model, sample_window=40)
+        self.assertEqual(report_drifted['status'], 'SUCCESS')
+        self.assertTrue(report_drifted['drift_detected'], "Drifted mode must detect simulated feature drift")
+        
+        # Verify specific shifted features were flagged
+        drifted_feature_names = [f['feature'] for f in report_drifted['feature_results'] if f['drift_detected']]
+        self.assertIn('cibil_score', drifted_feature_names)
+        self.assertIn('income_annum', drifted_feature_names)

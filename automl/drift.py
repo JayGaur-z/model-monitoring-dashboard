@@ -235,17 +235,30 @@ def detect_data_drift(model_obj, sample_window=100, alpha=0.05, min_samples=25):
         else:
             continue
 
-        # Decide whether feature is continuous numerical or categorical
-        # If numeric dtype with >= 10 unique values -> KS test
-        # If categorical or numeric with < 10 unique values (e.g. binary flags, discrete counts) -> Chi-Square
-        is_num = pd.api.types.is_numeric_dtype(ref_series) and pd.api.types.is_numeric_dtype(prod_series)
-        unique_count = max(ref_series.nunique(), prod_series.nunique())
+        # Robust feature type detection:
+        ref_num = pd.to_numeric(ref_series, errors='coerce')
+        prod_num = pd.to_numeric(prod_series, errors='coerce')
 
-        if is_num and unique_count >= 10:
-            result = compute_numerical_drift(ref_series, prod_series, alpha=alpha)
+        is_numeric = (ref_num.notnull().sum() > 0.8 * len(ref_series)) and (prod_num.notnull().sum() > 0.8 * len(prod_series))
+        
+        # Check if binary dummy feature (e.g. only values 0 and 1)
+        ref_unique = set(ref_num.dropna().unique())
+        prod_unique = set(prod_num.dropna().unique())
+        is_binary = ref_unique.issubset({0, 1, 0.0, 1.0}) and prod_unique.issubset({0, 1, 0.0, 1.0})
+
+        if is_numeric and not is_binary:
+            result = compute_numerical_drift(ref_num, prod_num, alpha=alpha)
             test_type = 'Kolmogorov-Smirnov (Numerical)'
         else:
-            result = compute_categorical_drift(ref_series, prod_series, alpha=alpha)
+            # If binary dummy, normalize to standardized integer strings ("0", "1")
+            if is_binary:
+                ref_cat = ref_num.dropna().astype(int).astype(str)
+                prod_cat = prod_num.dropna().astype(int).astype(str)
+            else:
+                ref_cat = ref_series.dropna().astype(str).str.strip()
+                prod_cat = prod_series.dropna().astype(str).str.strip()
+
+            result = compute_categorical_drift(ref_cat, prod_cat, alpha=alpha)
             test_type = 'Chi-Square (Categorical)'
 
         result['feature'] = feature
