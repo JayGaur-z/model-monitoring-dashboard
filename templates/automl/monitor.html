@@ -74,11 +74,20 @@
     <a href="{% url 'predict' model.model_name %}" class="btn btn-primary">Go to Prediction</a>
 </div>
 
+{% if latency_alert %}
+<div class="alert-card" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fde68a;">
+    <div>
+        <h4 style="margin: 0 0 0.25rem 0; color: #fbbf24;">Latency SLA Warning (System Performance)</h4>
+        <p style="margin: 0; font-size: 0.875rem;">Average inference latency is high ({{ avg_response_time }} ms > 500 ms threshold). This indicates system/compute slowdown, not feature distribution drift.</p>
+    </div>
+</div>
+{% endif %}
+
 {% if drift_alert %}
 <div class="alert-card">
     <div>
-        <h4 style="margin: 0 0 0.25rem 0; color: var(--danger);">Performance Warning</h4>
-        <p style="margin: 0; font-size: 0.875rem;">Average response time is very high (> 500ms) or unexpected outputs detected. Check model health.</p>
+        <h4 style="margin: 0 0 0.25rem 0; color: var(--danger);">Statistical Data Drift Detected (Covariate Shift)</h4>
+        <p style="margin: 0; font-size: 0.875rem;">{{ drift_report.message }} (Significance Level &alpha; = {{ drift_report.alpha }}). Baseline and production distributions differ significantly.</p>
     </div>
 </div>
 {% endif %}
@@ -126,6 +135,97 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<div class="glass-card" style="margin-top: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h3 style="margin-bottom: 0.25rem;">🔬 Statistical Data Drift Monitoring (MLOps)</h3>
+            <p class="text-secondary" style="margin: 0; font-size: 0.875rem;">
+                Comparing recent inference inputs against baseline reference data using Two-Sample Kolmogorov-Smirnov (Numerical) and Chi-Square (Categorical) tests.
+            </p>
+        </div>
+        {% if drift_report %}
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <span style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
+                Window: <strong>{{ drift_report.sample_count }}</strong> / {{ drift_report.sample_window }} logs
+            </span>
+            <span style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
+                Significance &alpha; = <strong>{{ drift_report.alpha }}</strong>
+            </span>
+            {% if drift_report.status == 'SUCCESS' %}
+                {% if drift_report.drift_detected %}
+                <span style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 600;">
+                    Status: DRIFT DETECTED ({{ drift_report.drifted_features_count }}/{{ drift_report.total_tested_features }})
+                </span>
+                {% else %}
+                <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 600;">
+                    Status: ALL FEATURES STABLE
+                </span>
+                {% endif %}
+            {% else %}
+                <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.825rem; font-weight: 500;">
+                    Status: {{ drift_report.status }}
+                </span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if drift_report.status == 'INSUFFICIENT_DATA' %}
+    <div style="padding: 1.5rem; background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.3); border-radius: 0.5rem; color: #fcd34d; font-size: 0.9rem;">
+        <strong>Statistical Guard Active:</strong> {{ drift_report.message }} Predictions must reach the statistical sample size threshold before drift hypothesis testing is performed to avoid false positive alarms.
+    </div>
+    {% elif drift_report.status == 'SUCCESS' and drift_report.feature_results %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Statistical Test</th>
+                    <th>Sample Size (Ref / Prod)</th>
+                    <th>Test Statistic</th>
+                    <th>p-value</th>
+                    <th>Threshold (&alpha;)</th>
+                    <th>Drift Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in drift_report.feature_results %}
+                <tr>
+                    <td style="font-weight: 600; color: #f8fafc;">{{ f.feature }}</td>
+                    <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ f.test }}</td>
+                    <td>{{ f.ref_count }} / {{ f.prod_count }}</td>
+                    <td style="font-family: monospace;">{{ f.statistic }}</td>
+                    <td style="font-family: monospace; font-weight: 600; {% if f.drift_detected %}color: var(--danger);{% else %}color: var(--success);{% endif %}">
+                        {{ f.p_value }}
+                    </td>
+                    <td>{{ drift_report.alpha }}</td>
+                    <td>
+                        {% if f.drift_detected %}
+                        <span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                            DRIFT DETECTED
+                        </span>
+                        {% else %}
+                        <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                            STABLE
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif drift_report.message %}
+    <div style="padding: 1.5rem; color: var(--text-secondary); text-align: center;">
+        {{ drift_report.message }}
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 1.5rem; padding: 0.85rem 1.25rem; background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; border-radius: 0 0.5rem 0.5rem 0; font-size: 0.825rem; color: #94a3b8; line-height: 1.5;">
+        <strong style="color: #93c5fd;">Important MLOps Note:</strong> {{ drift_report.performance_disclaimer }}
     </div>
 </div>
 

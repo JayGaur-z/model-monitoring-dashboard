@@ -34,7 +34,18 @@ class TrainedModel(models.Model):
             local_path = os.path.join(settings.BASE_DIR, 'saved_datasets', filename)
             if os.path.exists(local_path):
                 return local_path
-        return self.dataset_file_path
+        # Smart fallback: inspect saved_datasets for matching dataset CSV
+        datasets_dir = os.path.join(settings.BASE_DIR, 'saved_datasets')
+        if os.path.exists(datasets_dir):
+            clean_name = self.model_name.lower().replace('_', ' ').replace('-', ' ')
+            tokens = [t for t in clean_name.split() if t not in ['model', 'prediction', 'predictor']]
+            if tokens:
+                for fname in os.listdir(datasets_dir):
+                    if fname.endswith('.csv'):
+                        fname_clean = fname.lower()
+                        if all(t in fname_clean for t in tokens):
+                            return os.path.join(datasets_dir, fname)
+        return None
 
 class PredictionLog(models.Model):
     trained_model = models.ForeignKey(TrainedModel, on_delete=models.CASCADE, related_name='logs')

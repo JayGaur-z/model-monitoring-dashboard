@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from django.db.models import Avg
 from .stats import compute_dataset_stats
+from .drift import detect_data_drift
 
 def build_model(request):
     if request.method == 'POST':
@@ -133,9 +134,12 @@ def monitor(request, model_name):
     avg_response_time = logs.aggregate(Avg('response_time_ms'))['response_time_ms__avg'] or 0
     recent_logs = logs[:10]
     
-    drift_alert = False
-    if total_predictions > 0 and avg_response_time > 500:
-        drift_alert = True
+    # 1. Latency SLA Alert (System / DevOps performance)
+    latency_alert = bool(total_predictions > 0 and avg_response_time > 500)
+    
+    # 2. Statistical Data Drift Detection (MLOps / Statistical feature distribution shift)
+    drift_report = detect_data_drift(model_obj, sample_window=100, alpha=0.05, min_samples=25)
+    drift_alert = bool(drift_report.get('drift_detected', False))
         
     logs_for_chart = list(recent_logs[:20])
     chart_labels = [log.timestamp.strftime("%H:%M:%S") for log in reversed(logs_for_chart)]
@@ -158,7 +162,9 @@ def monitor(request, model_name):
         'total_predictions': total_predictions,
         'avg_response_time': round(avg_response_time, 2),
         'recent_logs': recent_logs,
+        'latency_alert': latency_alert,
         'drift_alert': drift_alert,
+        'drift_report': drift_report,
         'chart_labels': chart_labels,
         'chart_data': chart_data,
         'dataset_stats': dataset_stats,
